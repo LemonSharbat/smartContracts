@@ -42,6 +42,7 @@ contract Crowdfunding {
     }
 
     constructor(
+        address _owner,
         string memory _name,
         string memory _description,
         uint256 _goal,
@@ -51,7 +52,7 @@ contract Crowdfunding {
             goal = _goal;
             deadline = block.timestamp +(_durationInDays * 1 days); 
               // Deadline = current time + specified no. of days
-            owner = msg.sender;
+            owner = _owner;
             state = CampaignState.Active;
     }
 
@@ -140,4 +141,3 @@ contract Crowdfunding {
         deadline += (_daysToAdd *1 days);
     }
 }
-// This function allows the owner to extend the deadline of the campaign by a specified number of days.
