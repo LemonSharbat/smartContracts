@@ -7,6 +7,7 @@ contract Crowdfunding {
     uint256 public goal;  // Money
     uint256 public deadline;
     address public owner;
+    bool public paused;
 
     enum CampaignState { Active, Successful, Failed }
     CampaignState public state;
@@ -14,7 +15,7 @@ contract Crowdfunding {
     struct Tier {
         string name;
         uint256 amount;
-        uint256 backers;  //No of Tiers?
+        uint256 backers;  //No of Donars
     }
 
     struct Backer {
@@ -32,6 +33,11 @@ contract Crowdfunding {
 
     modifier campaignOpen() {
         require(state == CampaignState.Active, "Campaign is not Active");
+        _;
+    }
+
+    modifier notPaused() {
+        require(!paused, "Campaign is paused");
         _;
     }
 
@@ -60,7 +66,7 @@ contract Crowdfunding {
     }
 
 
-    function fund(uint256 _tierIndex) public payable campaignOpen {
+    function fund(uint256 _tierIndex) public payable campaignOpen notPaused {
         require(_tierIndex < tiers.length, "Invalid tier");
         require(msg.value == tiers[_tierIndex].amount,"Incorrect amount");
 
@@ -115,6 +121,23 @@ contract Crowdfunding {
         return backers[_backer].fundedTiers[_tierIndex];
     }
 
+    function getTiers() public view returns(Tier[] memory) {
+        return tiers;
+    }
+
+    function togglePause() public onlyOwner {
+        paused = !paused;
+    }
+
+    function getCampaignStatus() public view returns(CampaignState) {
+        if (state == CampaignState.Active && block.timestamp > deadline ) {
+            return address(this).balance >= goal ? CampaignState.Successful : CampaignState.Failed;          
+        }
+        return state;
+    }
+
+    function extendDeadline(uint256 _daysToAdd) public onlyOwner campaignOpen {
+        deadline += (_daysToAdd *1 days);
+    }
 }
-// This contract allows users to create crowdfunding campaigns with multiple funding tiers.
-// Users can fund campaigns, and the contract manages the state of the campaign based on contributions and deadlines.
+// This function allows the owner to extend the deadline of the campaign by a specified number of days.
