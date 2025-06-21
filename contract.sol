@@ -8,16 +8,30 @@ contract Crowdfunding {
     uint256 public deadline;
     address public owner;
 
+    enum CampaignState { Active, Successful, Failed }
+    CampaignState public state;
+
     struct Tier {
         string name;
         uint256 amount;
         uint256 backers;  //No of Tiers?
     }
 
+    struct Backer {
+        uint256 totalContribution;
+        mapping(uint256 => bool) fundedTiers;
+    }
+
     Tier[] public tiers; //Array of Tiers(structure)
+    mapping (address => Backer) public backers;
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not the owner");
+        _;
+    }
+
+    modifier campaignOpen() {
+        require(state == CampaignState.Active, "Campaign is not Active");
         _;
     }
 
@@ -32,14 +46,29 @@ contract Crowdfunding {
             deadline = block.timestamp +(_durationInDays * 1 days); 
               // Deadline = current time + specified no. of days
             owner = msg.sender;
+            state = CampaignState.Active;
     }
 
-    function fund(uint256 _tierIndex) public payable {
-        require(block.timestamp < deadline, "Sorry! The campaign has ended.");
+    function checkAndUpdateCampaignState() internal {
+        if (state == CampaignState.Active) {
+            if(block.timestamp >= deadline) {
+                state = address(this).balance >= goal ? CampaignState.Successful : CampaignState.Failed;
+            } else {
+                state = address(this).balance >= goal ? CampaignState.Successful : CampaignState.Active;
+            }
+        }
+    }
+
+
+    function fund(uint256 _tierIndex) public payable campaignOpen {
         require(_tierIndex < tiers.length, "Invalid tier");
         require(msg.value == tiers[_tierIndex].amount,"Incorrect amount");
 
         tiers[_tierIndex].backers++;
+        backers[msg.sender].totalContribution += msg.value;
+        backers[msg.sender].fundedTiers[_tierIndex] = true;
+
+        checkAndUpdateCampaignState(); //Updates the value of state after the funding
         }
 
     function addTier(
@@ -57,8 +86,9 @@ contract Crowdfunding {
     }
 
     function withdraw() public onlyOwner {
-        require(address(this).balance >= goal, "Goal had not been reached.");
-          // address(this).balance -> balance in 'this'(Crowdfunding) smart contract
+
+        checkAndUpdateCampaignState();
+        require(state == CampaignState.Successful, "Campaign is not sucessful yet..");
 
         uint256 balance = address(this).balance;
         require(balance > 0, "No balence to withrow");
@@ -71,4 +101,20 @@ contract Crowdfunding {
     function getContractBalance() public view returns(uint256) {
         return address(this).balance;
     }
+
+    function refund() public {
+        checkAndUpdateCampaignState();
+        require(state == CampaignState.Failed, "Campaign is not Failed yet");
+        uint256 amount = backers[msg.sender].totalContribution;
+
+        require(amount > 0,"No balance to refund..");
+        payable(msg.sender).transfer(amount);
+    }
+
+    function hasFundedTier(address _backer, uint256 _tierIndex) public view returns(bool) {
+        return backers[_backer].fundedTiers[_tierIndex];
+    }
+
 }
+// This contract allows users to create crowdfunding campaigns with multiple funding tiers.
+// Users can fund campaigns, and the contract manages the state of the campaign based on contributions and deadlines.
